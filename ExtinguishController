@@ -5,33 +5,29 @@ import lgpio
 import time
 import threading
 
-# Pin configuration
+# pinmap
 STEP_PIN = 19
 DIR_PIN = 26
 ENA_PIN = 13
 
 ACTUATOR_IN_A = 20
 ACTUATOR_IN_B = 21
-ACTUATOR_PWM = 12  # Software PWM
+ACTUATOR_PWM = 12  
 
 class ExtinguishController(Node):
 
     def __init__(self):
         super().__init__('extinguish_controller')
         
-        # Subscribe to the 'extinguish' topic
         self.subscription = self.create_subscription(String, 'extinguish', self.extinguish_callback, 10)
 
-        # Initialize GPIOs for stepper motor
         self.chip = lgpio.gpiochip_open(0)
         lgpio.gpio_claim_output(self.chip, STEP_PIN, 0)
         lgpio.gpio_claim_output(self.chip, DIR_PIN, 0)
         lgpio.gpio_claim_output(self.chip, ENA_PIN, 0)
 
-        # Enable stepper motor at the start
         lgpio.gpio_write(self.chip, ENA_PIN, 1)
 
-        # Initialize GPIOs for actuator
         lgpio.gpio_claim_output(self.chip, ACTUATOR_IN_A, 0)
         lgpio.gpio_claim_output(self.chip, ACTUATOR_IN_B, 0)
         lgpio.gpio_claim_output(self.chip, ACTUATOR_PWM, 0)
@@ -49,20 +45,16 @@ class ExtinguishController(Node):
             stepper_thread.join()
 
     def control_actuator(self):
-        # Retract actuator for 3 seconds
         self.control_actuator_movement('extend', speed=100)
-        time.sleep(3)  # Retract for 3 seconds
+        time.sleep(3)  
 
-        # Stop actuator and hold position for 10 seconds
         self.stop_actuator()
         self.get_logger().info("Holding actuator position for 15 seconds...")
         time.sleep(15)
 
-        # Extend actuator back to original position for 3 seconds
         self.control_actuator_movement('retract', speed=100)
         time.sleep(3)
 
-        # Stop actuator
         self.stop_actuator()
         self.get_logger().info("Actuator back to original position.")
 
@@ -75,7 +67,7 @@ class ExtinguishController(Node):
             lgpio.gpio_write(self.chip, ACTUATOR_IN_B, 1)
 
         self.get_logger().info(f"Actuator {direction} at speed {speed}")
-        for _ in range(100):  # Perform PWM control for 100 cycles
+        for _ in range(100):  
             self.software_pwm(ACTUATOR_PWM, speed, frequency=50)
 
     def stop_actuator(self):
@@ -83,46 +75,38 @@ class ExtinguishController(Node):
         lgpio.gpio_write(self.chip, ACTUATOR_IN_B, 0)
 
     def software_pwm(self, pwm_pin, duty_cycle, frequency=50):
-        period = 1.0 / frequency  # Calculate the period for the given frequency
+        period = 1.0 / frequency 
         high_time = period * (duty_cycle / 100.0)
         low_time = period - high_time
 
-        # Control the pin state for PWM signal
         lgpio.gpio_write(self.chip, pwm_pin, 1)
         time.sleep(high_time)
         lgpio.gpio_write(self.chip, pwm_pin, 0)
         time.sleep(low_time)
 
     def control_stepper_motor(self):
-        # Stepper motor control logic from working code
         self.get_logger().info("Stepper motor activated...")
 
-        # Example: Rotate stepper motor forward and backward
-        end_time = time.time() + 21  # Run for 21 seconds
+        end_time = time.time() + 21
         while time.time() < end_time:
-            # Rotate forward 60 degrees (assuming 200 steps per revolution)
-            self.rotate_stepper('forward', steps=33)  # 60 degrees = 33 steps
+            self.rotate_stepper('forward', steps=33) 
             time.sleep(0.5)
 
-            # Rotate backward 60 degrees
             self.rotate_stepper('backward', steps=33)
             time.sleep(0.5)
 
-        # Disable stepper motor after action
         lgpio.gpio_write(self.chip, ENA_PIN, 0)
         self.get_logger().info("Stepper motor deactivated.")
 
     def rotate_stepper(self, direction, steps):
-        # Set direction based on the command
         if direction == 'forward':
             lgpio.gpio_write(self.chip, DIR_PIN, 1)
         elif direction == 'backward':
             lgpio.gpio_write(self.chip, DIR_PIN, 0)
 
-        # Step the motor for the given number of steps
         for _ in range(steps):
             lgpio.gpio_write(self.chip, STEP_PIN, 1)
-            time.sleep(0.005)  # Adjust for speed
+            time.sleep(0.005) 
             lgpio.gpio_write(self.chip, STEP_PIN, 0)
             time.sleep(0.005)
 
