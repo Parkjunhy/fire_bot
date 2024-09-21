@@ -1,0 +1,4 @@
+This robot is based on ROS2_JAZZY on Ubuntu 24.04LTS(Python3.12). 
+The main purpose of the robot is to automatically sense the fire and extinguish it.
+By recognizing fire shown on the camera, the robot caculates the coordinates of fire and linearly align itself.
+After the calculation, the robot moves towards the fire and extinguish it by activating the actuators.
