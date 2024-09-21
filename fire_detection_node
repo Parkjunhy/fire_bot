@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
 import sys
@@ -18,15 +16,15 @@ class FireDetectionNode(Node):
 
         # Declare parameters
         self.declare_parameter('confidence_threshold', 0.4)
-        self.declare_parameter('class_id', 1)  # Assuming '1' is the class ID for fire
+        self.declare_parameter('class_id', 1)  # Fire's class id is 1.
         
         self.confidence_threshold = self.get_parameter('confidence_threshold').get_parameter_value().double_value
         self.fire_class_id = self.get_parameter('class_id').get_parameter_value().integer_value
         
-        # Load the ONNX model
+        # model load
         self.session = ort.InferenceSession('/home/jh/yolov5/best.onnx')
 
-        # Initialize camera
+        # Camera initializing
         self.bridge = CvBridge()
         self.image_sub = self.create_subscription(Image, '/image_raw', self.image_callback, 10)
         self.info_sub = self.create_subscription(CameraInfo, '/camera_info', self.info_callback, 10)
@@ -34,7 +32,7 @@ class FireDetectionNode(Node):
         self.last_image = None
         self.camera_info = None
 
-        # Publisher for fire location
+        # Topic publish
         self.fire_location_publisher = self.create_publisher(Point, 'fire_location', 10)
 
     def info_callback(self, msg):
@@ -44,71 +42,56 @@ class FireDetectionNode(Node):
         if self.camera_info is None:
             return
         
-        # Convert ROS Image message to OpenCV image
+        # conversion ros-cv
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         height, width, _ = cv_image.shape
 
         # Preprocess image
         resized_image = cv2.resize(cv_image, (640, 640))
-        input_image = resized_image.transpose((2, 0, 1))  # Change HWC to CHW
+        input_image = resized_image.transpose((2, 0, 1)) 
         input_image = np.expand_dims(input_image, axis=0).astype(np.float32) / 255.0
         
-        # Run inference
         inputs = {self.session.get_inputs()[0].name: input_image}
         outputs = self.session.run(None, inputs)
         
-        # Process detections
+        # detection
         boxes = self.process_detections(outputs[0], (height, width))
         if boxes:
             for box in boxes:
                 x_min, y_min, x_max, y_max = box
-                
-                # Calculate the center point of the bounding box
                 x_center = (x_min + x_max) / 2
                 y_center = (y_min + y_max) / 2
                 
-                # Create and publish fire location point message
                 fire_point = Point()
                 fire_point.x = float(x_center)
                 fire_point.y = float(y_center)
-                fire_point.z = 0.0  # Use z for confidence if needed
+                fire_point.z = 0.0 
                 
                 self.fire_location_publisher.publish(fire_point)
-
-                # Log the center point only
                 self.get_logger().info(f'Fire detected at center: ({x_center}, {y_center})')
         else:
             self.get_logger().info('No fire detected')
 
     def process_detections(self, detections, frame_shape):
-        detections = detections[0]  # Assuming batch size is 1
+        detections = detections[0]
         boxes = []
         height, width = frame_shape[:2]
 
         for detection in detections:
-            if len(detection) == 6:  # Ensure the detection has 6 elements
+            if len(detection) == 6: 
                 x_center, y_center, w, h, conf, class_id = detection
-
-                # Convert to integer class ID if necessary
                 class_id = int(round(class_id))
 
                 if conf > self.confidence_threshold and class_id == self.fire_class_id:
-                    # Convert YOLO format to bounding box
                     x_center, y_center, w, h = float(x_center), float(y_center), float(w), float(h)
-
-                    # Calculate the top-left and bottom-right coordinates of the bounding box
                     x_min = int(x_center - (w / 2))
                     y_min = int(y_center - (h / 2))
                     x_max = int(x_center + (w / 2))
                     y_max = int(y_center + (h / 2))
-
-                    # Ensure coordinates are within image boundaries
                     x_min = max(0, x_min)
                     y_min = max(0, y_min)
                     x_max = min(width, x_max)
                     y_max = min(height, y_max)
-
-                    # Append bounding box to list
                     boxes.append((x_min, y_min, x_max, y_max))
 
         return boxes
